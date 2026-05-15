@@ -1,0 +1,306 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#pragma once
+
+#include "Map.h"
+#include <vector>
+#include "LZ.h"
+#include "Texture.h"
+// #include "D3D11-NoWarn.h"
+#include <unordered_map>
+#include "Mutex.h"
+#include "LocationObject.h"
+#include "PointList.h"
+#include "LocationSprite.h"
+#include "LocationStructs.h"
+#include "ObjectMap.h"
+#include "Elevation.h"
+#include "ShaderStructs.h"
+
+#define MAX_ANIMATIONS		100
+
+class CLocation
+{
+public:
+	CLocation();
+	~CLocation();
+
+	BOOL Load(int locationFileIndex);
+
+	void Render();
+
+	static void SetPosition(StartupPosition pos);
+	static void SetPosition(float x, float y, float z, float angle);
+	void Move(float mx, float my, float mz, float tmx);
+	void DeltaAngles(float angle1, float angle2);
+
+	BOOL PointingChanged;
+
+	int GetPickObject(int& objectId, int& subObjectId);
+	void SetObjectVisibility(int objectId, BOOL visible);
+
+	void StartMappedAnimation(int index);
+	void StartIndexedAnimation(int index);
+	void StartIdAnimation(int index);
+	void StopMappedAnimation(int index);
+	void StopIndexedAnimation(int index);
+	BOOL IsAnimationFinished(int index);
+	BOOL IsIndexedAnimationFinished(int index);
+	int GetAnimationFrame(int index);
+	int GetIndexedAnimationFrame(int index);
+	void Animate();
+
+	double GetPlayerDistanceFromPoint(double x, double z);
+	Point GetPlayerPosition();
+	Point GetUnadjustedPlayerPosition();
+	SpritePosInfo GetSpriteInfo(int index);
+
+	static void SetMinY(float minY);
+	static void SetMaxY(float maxY);
+
+	CMapData* _mapEntry;
+	//CDMap::DMapEntry _dmapEntry;
+
+	void UpdateSprites();
+
+	static float _x;
+	static float _y;
+	static float _z;
+	static float _angle1;
+	static float _angle2;
+	static float _y_player_adjustment;
+	static float _y_player_adjustment_min;
+	static float _y_player_adjustment_max;
+	static float _y_elevation;
+
+#ifdef DEBUG
+	void MoveObject(float delta, BOOL X, BOOL Y, BOOL Z);
+#endif
+
+protected:
+	void UpdateY()
+	{
+		_y = _y_elevation + _y_player_adjustment;
+	}
+
+	static CElevation* _pCurrentElevation;
+
+	int _currentLocationId;
+
+	//CMutex _locationMutex;
+
+	//int AnimationType[100];
+	//int AnimationParameter[100];
+	//bool AnimationActive[100];
+	//PBYTE AnimationFramePtr[100];
+	//int AnimationFrame[100];
+	//ULONGLONG AnimationTime[100];
+	//int AnimationFrameDuration[100];
+
+	void Clear();
+
+	LPBYTE _locationData;
+
+	void LoadPaths();
+	void LoadTextures();
+
+	int _verticeCount;
+	Point* _points;
+	ID3D11Buffer* _vertexBuffer;
+
+	static BOOL _loading;
+
+	CLocationObject* _pLocObjects;
+	CLocationSubObject* _pLocSubObjects;
+
+	struct Object
+	{
+		int TextureIndex;
+		std::vector<Triangle> Triangles;
+		int VertexStart;
+		int VertexCount;
+	};
+
+	std::vector<Object> _objects;
+
+	ID3D11Buffer* _texturedVertexBuffer;
+	int _texturedVerticeCount;
+	ID3D11Buffer* _transparentVertexBuffer;
+	int _transparentVerticeCount;
+
+	void RenderTextured();
+
+	TLPoint GetPoint(PBYTE p3d2, int offset, int index, int points, float tw, float th, int objectCount, int object, int subObject);
+	TLPoint GetSpritePoint(PBYTE p3d2, int offset, int index, int objectCount, int object, int subObject);
+
+	struct Sprite
+	{
+		TLPoint P1;
+		TLPoint P2;
+		TLPoint P3;
+		TLPoint P4;
+	};
+
+	struct SpriteInfo
+	{
+		int TextureIndex;
+		Point P;
+		float OX;
+		float OY;
+		float W;
+		float H;
+		float U1;
+		float V1;
+		float U2;
+		float V2;
+		int ObjectIndex;
+		int SubObjectIndex;
+		int SubObjectId;
+	};
+
+	struct TextureInfo
+	{
+		int VertexStart;
+		int VerticeCount;
+	};
+
+	class CTextureGroup
+	{
+	public:
+		CTextureGroup()
+		{
+			pTexture = NULL;
+			Transparent = FALSE;
+			//VertexStart = 0;
+			//VerticeCount = 0;
+			TransparentVertexStart = 0;
+			TransparentVerticeCount = 0;
+			Rotated = FALSE;
+			AnimatedTextureIndex = -1;
+			SourcePointer = NULL;
+			RealTexture = NULL;
+
+			SpriteVertexStart = 0;
+			SpriteVerticeCount = 0;
+		}
+
+		BOOL Rotated;
+
+		CTexture* pTexture;
+		std::vector<CTexture*> Textures;
+		CTexture* RealTexture;
+		int AnimatedTextureIndex;
+		LPBYTE SourcePointer;
+
+		BOOL Transparent;
+		std::vector<Triangle> Triangles;
+		std::vector<Triangle> TransparentTriangles;
+		//int VertexStart;
+		//int VerticeCount;
+		int TransparentVertexStart;
+		int TransparentVerticeCount;
+
+		//std::vector<Sprite> Sprites;
+		int SpriteVertexStart;
+		int SpriteVerticeCount;
+
+		std::vector<SpriteInfo> SpriteInfos;
+		std::vector<TextureInfo> TextureInfos;
+
+		CPointList Points;
+
+		void RemovePoints(int first, int count);
+		void AddPoints(int first, int count);
+	};
+
+	std::vector<CTextureGroup*> _allTextures;
+
+	struct Path
+	{
+		int Id;
+		std::vector<DPoint> Points;
+		BOOL enabled;
+		BOOL allowLeave;
+	};
+
+	Path* _paths;
+	int _pathCount;
+
+	ID3D11Buffer* _spriteVertexBuffer;
+	int _spriteVerticeCount;
+
+	std::unordered_map<int, BOOL> opaqueTextures;
+	std::unordered_map<int, BOOL> transparentTextures;
+	std::unordered_map<int, BOOL> processedTextures;
+
+	ModelObject** _ppObjects;
+	int _objectCount;
+	int _subObjectCount;
+
+	BOOL Intersect(Box& boundingBox, Point& from, Point& direction);
+
+	int HitObject;
+	int HitSubObject;
+	int ObjectIndex;
+
+	VisibilityBufferType _visibilityBuffer;
+	TranslationBufferType _translationBuffer;
+	ObjectMap* _objectMap;
+	int _objectMapCount;
+	BOOL _visibilityChanged;
+	BOOL _translationChanged;
+
+	void ModifyLocationPoints(std::wstring file);
+	void ModifyLocationPoints(int startix, int endix, float x, float y, float z);
+
+	XMFLOAT4 GetTransparentColour(std::wstring file, int objectId, int subObjectId);
+
+	int _locationAnimationCount;
+	Animation Animations[MAX_ANIMATIONS];
+
+	BinaryData GetLocationData(int index);
+	std::list<CElevation*> Elevations;
+
+	ObjectVisibilityMapping* _improvedObjectMap;
+	void ChangeVisibility(int id, BOOL visible, BOOL setOnSubObjects, std::wstring header);
+
+#ifdef DEBUG
+	void RenderPoints();
+	void RenderLines();
+	void RenderPath();
+public:
+	static BOOL _renderTextured;
+	static BOOL _renderPoints;
+	static BOOL _renderLines;
+	static BOOL _renderPaths;
+	static BOOL _disableClipping;
+
+	ID3D11Buffer* _pathVertexBuffer;
+	ID3D11Buffer* _pathIndexBuffer;
+	int _pathIndexCount;
+
+	ID3D11Buffer* _indexBuffer;
+	int _indexCount;
+	int* _pIndexes;
+	std::vector<int> _indexes;
+#endif
+};

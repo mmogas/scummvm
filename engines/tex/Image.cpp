@@ -1,0 +1,106 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "Image.h"
+
+CImage::CImage(DoubleData dd, int width, int height, int factor)
+{
+	Init(dd.File1.Data, dd.File2, width, height, factor);
+}
+
+CImage::CImage(LPBYTE palette, BinaryData bd, int width, int height, int factor)
+{
+	Init(palette, bd, width, height, factor);
+
+	CopyMemory(_pVideoOutputBuffer, bd.Data, min(width*height, bd.Length));
+
+	//// Delete palette
+	//delete[] dd.File1.Data;
+
+	_framePointer = 1;
+}
+
+CImage::~CImage()
+{
+}
+
+BOOL CImage::Update()
+{
+	BOOL updated = CAnimBase::Update();
+	_done = FALSE;
+	return updated;
+}
+
+void CImage::Init(LPBYTE palette, BinaryData bd, int width, int height, int factor)
+{
+	CAnimBase::Init(bd);
+
+	_width = width;
+	_height = height;
+
+	// Copy palette
+	for (int c = 0; c < 256; c++)
+	{
+		double r = palette[c * 3 + 0];
+		double g = palette[c * 3 + 1];
+		double b = palette[c * 3 + 2];
+		int ri = (byte)((r * 255.0) / 63.0);
+		int gi = (byte)((g * 255.0) / 63.0);
+		int bi = (byte)((b * 255.0) / 63.0);
+		int col = 0xff000000 | bi | (gi << 8) | (ri << 16);
+		_pPalette[c] = col;
+	}
+
+	// Create image buffer
+	CreateBuffers(width, height, factor);
+	_texture.Init(_width, _height);
+
+	CopyMemory(_pVideoOutputBuffer, bd.Data, min(width*height, bd.Length));
+
+	// Delete palette
+	//delete[] dd.File1.Data;
+
+	_framePointer = 1;
+
+	// Replace texture if new video frame is required (frame time has lapsed, video frame exists)
+	ID3D11Texture2D* pTex = _texture.GetTexture();
+	if (pTex != NULL)
+	{
+		D3D11_MAPPED_SUBRESOURCE subRes;
+		if (SUCCEEDED(dx.Map(pTex, 0, D3D11_MAP_WRITE_DISCARD, 0, &subRes)))
+		{
+			int* pScr = (int*)subRes.pData;
+			for (int y = 0; y < _height; y++)
+			{
+				for (int x = 0; x < _width; x++)
+				{
+					pScr[y * subRes.RowPitch / 4 + x] = _pPalette[_pVideoOutputBuffer[y * _width + x]];
+				}
+			}
+
+			dx.Unmap(pTex, 0);
+		}
+		else
+		{
+			int debug = 0;
+		}
+	}
+}

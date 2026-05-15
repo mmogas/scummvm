@@ -1,0 +1,216 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "InputMapping.h"
+// #include <Windows.h>
+#include "Utilities.h"
+#include "GameController.h"
+
+std::unordered_map<InputAction, InputMap> CInputMapping::ControlsMap;
+BOOL CInputMapping::IgnoreNextMouseInput = FALSE;
+
+BOOL IsJoystickSource(InputSource source)
+{
+	return (source == InputSource::JoystickAxis || source == InputSource::JoystickButton || source == InputSource::JoystickDPad);
+}
+
+void CInputMapping::ReadConfig(int* pConfig, int ix, InputAction action)
+{
+	ControlsMap[action].MouseKeySource = (InputSource)pConfig[ix * 4 + 0];
+	ControlsMap[action].MouseKeyIdentifier = pConfig[ix * 4 + 1];
+	ControlsMap[action].JoystickSource = (InputSource)pConfig[ix * 4 + 2];
+	ControlsMap[action].JoystickIdentifier = pConfig[ix * 4 + 3];
+}
+
+void CInputMapping::LoadControlsMap()
+{
+	// Setup default controls map
+	ControlsMap[InputAction::Cursor] = { InputSource::Unknown,0,InputSource::Mouse,0,InputSource::Mouse | InputSource::JoystickAxis,0,InputSource::Unknown,FALSE,0 };
+	ControlsMap[InputAction::Action] = { InputSource::Unknown,0,InputSource::MouseButton,-1,InputSource::MouseButton | InputSource::Key | InputSource::JoystickButton,0,InputSource::Unknown,FALSE,0 };
+	ControlsMap[InputAction::Back] = { InputSource::Unknown,0,InputSource::Key,0x10000,InputSource::MouseButton | InputSource::Key | InputSource::JoystickButton,0,InputSource::Unknown,FALSE,0 };
+	ControlsMap[InputAction::Cycle] = { InputSource::Unknown,0,InputSource::MouseButton,1,InputSource::MouseButton | InputSource::Key | InputSource::JoystickButton,0,InputSource::Unknown,FALSE,0 };
+	ControlsMap[InputAction::MoveForward] = { InputSource::Unknown,0,InputSource::Key,0x0110000, InputSource::Key | InputSource::JoystickAxis | InputSource::JoystickButton,0,InputSource::Unknown,FALSE,0 };
+	ControlsMap[InputAction::MoveBack] = { InputSource::Unknown,0,InputSource::Key,0x1f0000, InputSource::Key | InputSource::JoystickAxis | InputSource::JoystickButton,0,InputSource::Unknown,FALSE,0 };
+	ControlsMap[InputAction::MoveLeft] = { InputSource::Unknown,0,InputSource::Key,0x1e0000, InputSource::Key | InputSource::JoystickAxis | InputSource::JoystickButton,0,InputSource::Unknown,FALSE,0 };
+	ControlsMap[InputAction::MoveRight] = { InputSource::Unknown,0,InputSource::Key,0x200000, InputSource::Key | InputSource::JoystickAxis | InputSource::JoystickButton,0,InputSource::Unknown,FALSE,0 };
+	ControlsMap[InputAction::MoveUp] = { InputSource::Unknown,0,InputSource::Key,0x120000, InputSource::Key | InputSource::JoystickAxis | InputSource::JoystickButton,0,InputSource::Unknown,FALSE,0 };
+	ControlsMap[InputAction::MoveDown] = { InputSource::Unknown,0,InputSource::Key,0x100000, InputSource::Key | InputSource::JoystickAxis | InputSource::JoystickButton,0,InputSource::Unknown,FALSE,0 };
+	ControlsMap[InputAction::Run] = { InputSource::Unknown,0,InputSource::Key,0x2a0000, InputSource::MouseButton | InputSource::Key | InputSource::JoystickButton,0,InputSource::Unknown,FALSE,0 };
+	ControlsMap[InputAction::Next] = { InputSource::Unknown,0,InputSource::MouseWheel,-1, InputSource::MouseWheel | InputSource::Key | InputSource::JoystickButton,0,InputSource::Unknown,FALSE,0 };
+	ControlsMap[InputAction::Prev] = { InputSource::Unknown,0,InputSource::MouseWheel,1, InputSource::MouseWheel | InputSource::Key | InputSource::JoystickButton,0,InputSource::Unknown,FALSE,0 };
+	ControlsMap[InputAction::Inventory] = { InputSource::Unknown,0,InputSource::Key,0x170000, InputSource::MouseButton | InputSource::Key | InputSource::JoystickButton,0,InputSource::Unknown,FALSE,0 };
+	ControlsMap[InputAction::Travel] = { InputSource::Unknown,0,InputSource::Key,0x140000, InputSource::MouseButton | InputSource::Key | InputSource::JoystickButton,0,InputSource::Unknown,FALSE,0 };
+	ControlsMap[InputAction::Hints] = { InputSource::Unknown,0,InputSource::Key,0x230000, InputSource::MouseButton | InputSource::Key | InputSource::JoystickButton,0,InputSource::Unknown,FALSE,0 };
+
+	HKEY hk;
+	std::wstring key = L"SOFTWARE\\Access Software\\" + pConfig->GetGameName();
+	if (RegOpenKeyEx(HKEY_CURRENT_USER, key.c_str(), 0, KEY_READ, &hk) == 0)
+	{
+		int config[16 * 4];
+		// Load blob from registry
+
+		DWORD size = sizeof(config);
+		if (RegGetValue(hk, L"", L"Controls", RRF_RT_REG_BINARY, NULL, (PVOID)&config, &size) == ERROR_SUCCESS)
+		{
+			int ix = 0;
+			ReadConfig(config, ix++, InputAction::Cursor);
+			ReadConfig(config, ix++, InputAction::Action);
+			ReadConfig(config, ix++, InputAction::Back);
+			ReadConfig(config, ix++, InputAction::Cycle);
+			ReadConfig(config, ix++, InputAction::MoveForward);
+			ReadConfig(config, ix++, InputAction::MoveBack);
+			ReadConfig(config, ix++, InputAction::MoveLeft);
+			ReadConfig(config, ix++, InputAction::MoveRight);
+			ReadConfig(config, ix++, InputAction::MoveUp);
+			ReadConfig(config, ix++, InputAction::MoveDown);
+			ReadConfig(config, ix++, InputAction::Run);
+			ReadConfig(config, ix++, InputAction::Next);
+			ReadConfig(config, ix++, InputAction::Prev);
+			ReadConfig(config, ix++, InputAction::Inventory);
+			ReadConfig(config, ix++, InputAction::Travel);
+			if (size >= 16 * 4)
+			{
+				ReadConfig(config, ix++, InputAction::Hints);
+			}
+		}
+
+		RegCloseKey(hk);
+	}
+}
+
+void CInputMapping::WriteConfig(int* pConfig, int ix, InputAction action)
+{
+	pConfig[ix * 4 + 0] = (int)ControlsMap[action].MouseKeySource;
+	pConfig[ix * 4 + 1] = ControlsMap[action].MouseKeyIdentifier;
+	pConfig[ix * 4 + 2] = (int)ControlsMap[action].JoystickSource;
+	pConfig[ix * 4 + 3] = ControlsMap[action].JoystickIdentifier;
+}
+
+void CInputMapping::SaveControlsMap()
+{
+	HKEY hk;
+	std::wstring key = L"SOFTWARE\\Access Software\\" + pConfig->GetGameName();
+	if (RegCreateKeyEx(HKEY_CURRENT_USER, key.c_str(), 0, 0, 0, KEY_WRITE, NULL, &hk, NULL) == 0)
+	{
+		// Save controls map to registry
+		int config[16 * 4];
+		int ix = 0;
+		WriteConfig(config, ix++, InputAction::Cursor);
+		WriteConfig(config, ix++, InputAction::Action);
+		WriteConfig(config, ix++, InputAction::Back);
+		WriteConfig(config, ix++, InputAction::Cycle);
+		WriteConfig(config, ix++, InputAction::MoveForward);
+		WriteConfig(config, ix++, InputAction::MoveBack);
+		WriteConfig(config, ix++, InputAction::MoveLeft);
+		WriteConfig(config, ix++, InputAction::MoveRight);
+		WriteConfig(config, ix++, InputAction::MoveUp);
+		WriteConfig(config, ix++, InputAction::MoveDown);
+		WriteConfig(config, ix++, InputAction::Run);
+		WriteConfig(config, ix++, InputAction::Next);
+		WriteConfig(config, ix++, InputAction::Prev);
+		WriteConfig(config, ix++, InputAction::Inventory);
+		WriteConfig(config, ix++, InputAction::Travel);
+		WriteConfig(config, ix++, InputAction::Hints);
+
+		// Save blob to registry
+		DWORD size = sizeof(config);
+		RegSetValueEx(hk, L"Controls", 0, REG_BINARY, (PBYTE)&config, size);
+
+		RegCloseKey(hk);
+	}
+}
+
+void CInputMapping::Input(InputSource source, int identifier, int value)
+{
+	// Workaround for the location module requiring to center the mouse
+	if (source == InputSource::Mouse && IgnoreNextMouseInput)
+	{
+		IgnoreNextMouseInput = FALSE;
+		return;
+	}
+
+	// Pair current axis
+	int pairedXAxis = -1;
+	if (source == InputSource::JoystickAxis)
+	{
+		if (identifier == 0 || identifier == 4)
+		{
+			pairedXAxis = 0;
+		}
+		else if (identifier == 8 || identifier == 20)
+		{
+			pairedXAxis = 20;
+		}
+		else if (identifier == 12 || identifier == 16)
+		{
+			pairedXAxis = 12;
+		}
+	}
+
+	// Set or clear input
+	for (auto bind : ControlsMap)
+	{
+		InputAction action = bind.first;
+
+		if ((bind.second.JoystickSource == source && (bind.second.JoystickIdentifier == identifier || bind.second.JoystickIdentifier == pairedXAxis)) ||
+			(bind.second.MouseKeySource == source && bind.second.MouseKeyIdentifier == identifier))
+		{
+			ControlsMap[bind.first].CurrentSource = source;
+
+			// If axis data, only modify correct half
+			if (source == InputSource::JoystickAxis)
+			{
+				int oldData = bind.second.CurrentJoystickData;
+				int newData = 0;
+
+				//Trace(L"Joystick input: Offset = ");
+				//Trace(identifier);
+				//Trace(L", paired x-axis: ");
+				//Trace(pairedXAxis);
+
+				if (action == InputAction::MoveForward || action == InputAction::MoveBack || action == InputAction::MoveLeft || action == InputAction::MoveRight)
+				{
+					action = InputAction::MoveForward;
+					oldData = ControlsMap[action].CurrentJoystickData;
+				}
+
+				if (identifier == pairedXAxis)
+				{
+					// X data
+					newData = ((value << 16) & ~0xffff) | (oldData & 0xffff);
+				}
+				else
+				{
+					// Y data
+					newData = (value & 0xffff) | (oldData & ~0xffff);
+				}
+
+				ControlsMap[action].CurrentJoystickData = ControlsMap[action].CurrentData = newData;
+			}
+			else
+			{
+				ControlsMap[action].CurrentData = value;
+			}
+
+			ControlsMap[action].IsActive = TRUE;
+		}
+	}
+}
